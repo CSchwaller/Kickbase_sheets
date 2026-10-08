@@ -1,0 +1,74 @@
+name: Kickbase -> Google Sheets
+
+on:
+  schedule:
+    # Alle 15 min in den Bundesliga-Zeitfenstern (UTC!), Di/Mi für englische Wochen.
+    # Ob wirklich abgerufen wird, entscheidet kickoff_gate.py anhand der Anstoßzeiten.
+    - cron: "*/15 11-22 * * 0,2,3,5,6"
+    # Täglich 06:00 UTC: Nachlauf für Punktekorrekturen (nur wenn in den letzten 36 h gespielt wurde)
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Spieltage für Aufstellungen, z. B. '1 2 3 4' (leer = automatisch)"
+        required: false
+        default: ""
+
+concurrency:
+  group: kickbase
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Kickoff-Gate (OpenLigaDB)
+        id: gate
+        env:
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+          DAILY: ${{ github.event.schedule == '0 6 * * *' }}
+        run: |
+          if [ "$DAILY" = "true" ]; then python kickoff_gate.py --daily; else python kickoff_gate.py; fi
+
+      - name: Positions-Cache laden
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: positions_cache.json
+          key: positions-${{ github.run_id }}
+          restore-keys: positions-
+
+      - name: Kickbase abrufen und Sheet schreiben
+        if: steps.gate.outputs.run == 'true'
+        env:
+          KICKBASE_EMAIL: ${{ secrets.KICKBASE_EMAIL }}
+          KICKBASE_PASSWORD: ${{ secrets.KICKBASE_PASSWORD }}
+          KICKBASE_LEAGUE: ${{ secrets.KICKBASE_LEAGUE }}
+          KICKBASE_SHEET: ${{ secrets.KICKBASE_SHEET }}
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          DAYS: ${{ github.event.inputs.days }}
+        run: |
+          printf '%s' "$GOOGLE_SA_JSON" > service_account.json
+          if [ -n "$DAYS" ]; then
+            python kickbase_fetch.py --days $DAYS
+          else
+            python kickbase_fetch.py
+          fi
+          rm -f service_account.json
+
+      - name: Positions-Cache speichern
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: positions_cache.json
+          key: positions-${{ github.run_id }}

@@ -1,0 +1,10 @@
+# Zugangsdaten – NIEMALS committen
+service_account.json
+*.json.key
+.env
+
+# Lokale Ausgaben
+export/
+dumps/
+positions_cache.json
+__pycache__/
