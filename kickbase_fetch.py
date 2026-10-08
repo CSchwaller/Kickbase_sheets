@@ -34,7 +34,7 @@ from pathlib import Path
 import requests
 
 BASE = "https://api.kickbase.com"
-DELAY = 0.6
+DELAY = 0.4
 COMPETITION = 1  # Bundesliga
 POS = {1: "TW", 2: "ABW", 3: "MF", 4: "ST"}
 

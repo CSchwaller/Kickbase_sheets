@@ -2,9 +2,12 @@ name: Kickbase -> Google Sheets
 
 on:
   schedule:
-    # Alle 15 min in den Bundesliga-Zeitfenstern (UTC!), Di/Mi für englische Wochen.
+    # Alle 5 min in den typischen Bundesliga-Fenstern (UTC! deckt Sommer- und Winterzeit ab).
     # Ob wirklich abgerufen wird, entscheidet kickoff_gate.py anhand der Anstoßzeiten.
-    - cron: "*/15 11-22 * * 0,2,3,5,6"
+    - cron: "*/5 18-21 * * 5"     # Fr  20:30-Spiel
+    - cron: "*/5 13-20 * * 6"     # Sa  15:30 + 18:30
+    - cron: "*/5 13-21 * * 0"     # So  15:30 / 17:30 / 19:30
+    - cron: "*/15 16-21 * * 2,3"  # Di/Mi englische Wochen (seltener -> 15 min)
     # Täglich 06:00 UTC: Nachlauf für Punktekorrekturen (nur wenn in den letzten 36 h gespielt wurde)
     - cron: "0 6 * * *"
   workflow_dispatch:
