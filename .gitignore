@@ -8,3 +8,6 @@ export/
 dumps/
 positions_cache.json
 __pycache__/
+
+# Website-Daten (werden bei jedem Lauf erzeugt)
+site/data.json

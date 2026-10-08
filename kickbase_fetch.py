@@ -26,6 +26,7 @@ import csv
 import getpass
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -142,8 +143,10 @@ def write_sheets(sheet, stand, gesamt_tab, spieltage_tab, day_tabs):
         ws.freeze(rows=1)
         print(f"  -> Sheet-Tab '{title}': {len(rows)} Zeilen")
 
-    put("Gesamt", *gesamt_tab, index=0)
-    put("Spieltage", *spieltage_tab, index=1)
+    if gesamt_tab:
+        put("Gesamt", *gesamt_tab, index=0)
+    if spieltage_tab:
+        put("Spieltage", *spieltage_tab, index=1)
     for day, (header, rows) in sorted(day_tabs.items()):
         put(f"ST {day}", header, rows, index=2)  # neuester Spieltag vorne
 
@@ -152,6 +155,62 @@ def write_sheets(sheet, stand, gesamt_tab, spieltage_tab, day_tabs):
         if ws.title in ("Tabelle1", "Sheet1") and len(sh.worksheets()) > 1:
             sh.del_worksheet(ws)
     print(f"  -> {sh.url}")
+
+    # Archiv: alle übrigen "ST <n>"-Tabs in EINEM Request zurücklesen (für die Website)
+    archive = {}
+    old = [ws.title for ws in sh.worksheets()
+           if re.fullmatch(r"ST \d+", ws.title) and int(ws.title[3:]) not in day_tabs]
+    if old:
+        res = sh.values_batch_get([f"'{t}'!A2:G400" for t in old],
+                                  params={"valueRenderOption": "UNFORMATTED_VALUE"})
+        for title, vr in zip(old, res.get("valueRanges", [])):
+            archive[int(title[3:])] = [r + [""] * (7 - len(r)) for r in vr.get("values", [])]
+        print(f"  -> Archiv gelesen: {', '.join(old)}")
+    return archive
+
+
+def build_site_data(league_name, stand, current_day, last_done, fetched, positions, teams, archive):
+    """JSON für die Website: Aufstellungen + (Live-)Punkte je Spieltag.
+    fetched = [(day, name, uid, u0, lp)] aus dem Teamcenter, archive = ST-Tabs aus dem Sheet."""
+    lineups = {}
+
+    def entry(day, name, rank, pts):
+        return lineups.setdefault(str(day), {}).setdefault(name, {
+            "name": name, "rank": rank if rank not in ("", None) else None,
+            "points": pts if pts not in ("", None) else None, "players": []})
+
+    # Archiv: [Platz, Manager, Manager-Punkte, Pos, Spieler, Verein, Punkte]
+    for day, rows in archive.items():
+        for pl, name, mdp, pos, spieler, verein, pkt in (r[:7] for r in rows):
+            if not name:
+                continue
+            e = entry(day, name, pl, mdp)
+            if not str(spieler).startswith("("):
+                e["players"].append({"pos": pos, "name": spieler, "team": verein,
+                                     "points": pkt if pkt != "" else 0, "st": 2})
+    # frisch abgerufene Spieltage ersetzen das Archiv
+    for day in {f[0] for f in fetched}:
+        lineups.pop(str(day), None)
+    for day, name, uid, u0, lp in fetched:
+        e = entry(day, name, u0.get("pl"), u0.get("mdp"))
+        for pl in lp:
+            tid = str(pl.get("tid", ""))
+            e["players"].append({
+                "pos": POS.get(positions.get(str(pl.get("i"))), ""),
+                "name": pl.get("n"), "team": teams.get(tid, tid),
+                "points": pl.get("p"),          # fehlt, solange das Spiel nicht lief
+                "ko": pl.get("md"),             # Anstoß (UTC)
+                "st": pl.get("mst"),            # Spielstatus (2 = beendet)
+            })
+
+    return {
+        "league": league_name,
+        "updated": stand.isoformat(timespec="minutes"),
+        "current_day": current_day,
+        "last_done": last_done,
+        "lineups": {d: sorted(v.values(), key=lambda e: -(e["points"] or 0))
+                    for d, v in lineups.items()},
+    }
 
 
 def main():
@@ -162,6 +221,9 @@ def main():
     ap.add_argument("--days", type=int, nargs="*",
                     help="Spieltage für Aufstellungen (Standard: aktueller + letzter abgeschlossener)")
     ap.add_argument("--sheet", help="Google-Sheet-URL oder -ID (optional, sonst Env KICKBASE_SHEET)")
+    ap.add_argument("--site", help="Ordner, in den data.json für die Website geschrieben wird")
+    ap.add_argument("--lineups-only", action="store_true",
+                    help="nur Aufstellungen/Live-Punkte (ohne Gesamt- und Spieltags-Tabelle)")
     args = ap.parse_args()
     if not args.league:
         ap.error("--league oder KICKBASE_LEAGUE angeben")
@@ -190,7 +252,9 @@ def main():
     # --- Spieltage
     md = get(f"/v4/competitions/{COMPETITION}/matchdays", raw_name="matchdays")
     current_day = md.get("day")
-    last_done = get(f"{L}/ranking", raw_name="ranking").get("day")
+    ranking = get(f"{L}/ranking", raw_name="ranking")
+    last_done = ranking.get("day")
+    league_name = ranking.get("ti", "Kickbase")
     print(f"Aktueller Spieltag: {current_day}, letzter abgeschlossener: {last_done}")
 
     # --- Manager
@@ -225,21 +289,22 @@ def main():
         uid, name = m["i"], m["n"]
         print(f"[{i}/{len(mgrs)}] {name}")
 
-        # Gesamt
-        d = get(f"{L}/managers/{uid}/dashboard", raw_name=f"dashboard_{uid}")
-        gesamt.append([d.get("pl"), name, d.get("tp"), d.get("ap"),
-                       d.get("mdw"), d.get("hpt"), int(d.get("tv") or 0), uid])
+        if not args.lineups_only:
+            # Gesamt
+            d = get(f"{L}/managers/{uid}/dashboard", raw_name=f"dashboard_{uid}")
+            gesamt.append([d.get("pl"), name, d.get("tp"), d.get("ap"),
+                           d.get("mdw"), d.get("hpt"), int(d.get("tv") or 0), uid])
 
-        # Punkte je Spieltag (aktuelle Saison = letzter Eintrag)
-        p = get(f"{L}/managers/{uid}/performance", raw_name=f"performance_{uid}")
-        seasons = p.get("it") or []
-        cur = seasons[-1] if seasons else {}
-        pts = {}
-        for e in cur.get("it", []):
-            if "mdp" in e:
-                pts[e["day"]] = e["mdp"]
-                season_days.add(e["day"])
-        per_mgr_days[uid] = (name, pts)
+            # Punkte je Spieltag (aktuelle Saison = letzter Eintrag)
+            p = get(f"{L}/managers/{uid}/performance", raw_name=f"performance_{uid}")
+            seasons = p.get("it") or []
+            cur = seasons[-1] if seasons else {}
+            pts = {}
+            for e in cur.get("it", []):
+                if "mdp" in e:
+                    pts[e["day"]] = e["mdp"]
+                    season_days.add(e["day"])
+            per_mgr_days[uid] = (name, pts)
 
         # Aufstellungen: Teamcenter -> lp[] (Reihenfolge = Formation, TW zuerst),
         # us[0].mdp = Punkte des Managers am Spieltag, us[0].pl = Spieltagsplatz
@@ -279,22 +344,25 @@ def main():
                           teams.get(tid, tid), pl.get("p", 0), uid])
 
     # --- CSVs
-    gesamt.sort(key=lambda x: (x[0] is None or x[0] == 0, x[0] or 0, -(x[2] or 0)))
-    write_csv(out / "gesamt.csv",
-              ["Platz", "Manager", "Punkte", "Ø Punkte", "Spieltagssiege",
-               "Bester Spieltag", "Teamwert", "UserID"], gesamt)
-
+    full = not args.lineups_only
     cols = sorted(season_days)
-    for uid, (name, pts) in per_mgr_days.items():
-        spieltage.append([name] + [pts.get(c, "") for c in cols]
-                         + [sum(v for v in pts.values() if isinstance(v, (int, float)))])
-    spieltage.sort(key=lambda r: -r[-1])
-    write_csv(out / "spieltage.csv", ["Manager"] + [f"ST {c}" for c in cols] + ["Summe"], spieltage)
+    if full:
+        gesamt.sort(key=lambda x: (x[0] is None or x[0] == 0, x[0] or 0, -(x[2] or 0)))
+        write_csv(out / "gesamt.csv",
+                  ["Platz", "Manager", "Punkte", "Ø Punkte", "Spieltagssiege",
+                   "Bester Spieltag", "Teamwert", "UserID"], gesamt)
+        for uid, (name, pts) in per_mgr_days.items():
+            spieltage.append([name] + [pts.get(c, "") for c in cols]
+                             + [sum(v for v in pts.values() if isinstance(v, (int, float)))])
+        spieltage.sort(key=lambda r: -r[-1])
+        write_csv(out / "spieltage.csv", ["Manager"] + [f"ST {c}" for c in cols] + ["Summe"], spieltage)
 
     write_csv(out / "aufstellungen.csv",
               ["Spieltag", "Manager", "Spieltagsplatz", "Manager-Punkte", "Slot", "Pos",
                "Spieler", "Verein", "Spieler-Punkte", "UserID"], aufst)
 
+    archive = {}
+    stand = now_berlin()
     if args.sheet:
         print("Google Sheets ...")
         g_head = ["Platz", "Manager", "Punkte", "Ø Punkte", "Spieltagssiege",
@@ -308,8 +376,17 @@ def main():
                                                  [pl, name, mdp, pos, spieler, verein, pkt]))
         day_tabs = {d: (d_head, [x[3] for x in sorted(v, key=lambda t: t[:3])])
                     for d, v in day_tabs.items()}
-        write_sheets(args.sheet, now_berlin().strftime("%d.%m.%Y %H:%M"),
-                     (g_head, [r[:7] for r in gesamt]), (s_head, spieltage), day_tabs)
+        archive = write_sheets(args.sheet, stand.strftime("%d.%m.%Y %H:%M"),
+                               (g_head, [r[:7] for r in gesamt]) if full else None,
+                               (s_head, spieltage) if full else None, day_tabs)
+
+    if args.site:
+        data = build_site_data(league_name, stand, current_day, last_done,
+                               lineups, positions, teams, archive)
+        site = Path(args.site)
+        site.mkdir(parents=True, exist_ok=True)
+        (site / "data.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        print(f"  -> {site / 'data.json'} ({len(data['lineups'])} Spieltage mit Aufstellungen)")
 
     print(f"\nFertig: {out.resolve()}")
 

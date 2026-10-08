@@ -1,4 +1,4 @@
-name: Kickbase -> Google Sheets
+name: Kickbase -> Google Sheets + Website
 
 on:
   schedule:
@@ -10,12 +10,20 @@ on:
     - cron: "*/15 16-21 * * 2,3"  # Di/Mi englische Wochen (seltener -> 15 min)
     # Täglich 06:00 UTC: Nachlauf für Punktekorrekturen (nur wenn in den letzten 36 h gespielt wurde)
     - cron: "0 6 * * *"
+  push:
+    branches: [main]
+    paths: ["site/**"]            # Website-Änderungen sofort veröffentlichen
   workflow_dispatch:
     inputs:
       days:
         description: "Spieltage für Aufstellungen, z. B. '1 2 3 4' (leer = automatisch)"
         required: false
         default: ""
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: kickbase
@@ -25,6 +33,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +48,7 @@ jobs:
       - name: Kickoff-Gate (OpenLigaDB)
         id: gate
         env:
-          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+          FORCE_RUN: ${{ github.event_name != 'schedule' }}
           DAILY: ${{ github.event.schedule == '0 6 * * *' }}
         run: |
           if [ "$DAILY" = "true" ]; then python kickoff_gate.py --daily; else python kickoff_gate.py; fi
@@ -51,7 +61,7 @@ jobs:
           key: positions-${{ github.run_id }}
           restore-keys: positions-
 
-      - name: Kickbase abrufen und Sheet schreiben
+      - name: Kickbase abrufen, Sheet + data.json schreiben
         if: steps.gate.outputs.run == 'true'
         env:
           KICKBASE_EMAIL: ${{ secrets.KICKBASE_EMAIL }}
@@ -60,13 +70,15 @@ jobs:
           KICKBASE_SHEET: ${{ secrets.KICKBASE_SHEET }}
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           DAYS: ${{ github.event.inputs.days }}
+          # Live-Läufe: nur Aufstellungen + Live-Punkte (19 statt ~60 Kickbase-Requests).
+          # Täglicher Lauf und manuelle Starts aktualisieren zusätzlich Gesamt/Spieltage im Sheet.
+          LIVE: ${{ github.event_name == 'schedule' && github.event.schedule != '0 6 * * *' }}
         run: |
           printf '%s' "$GOOGLE_SA_JSON" > service_account.json
-          if [ -n "$DAYS" ]; then
-            python kickbase_fetch.py --days $DAYS
-          else
-            python kickbase_fetch.py
-          fi
+          OPTS="--site site"
+          if [ "$LIVE" = "true" ]; then OPTS="$OPTS --lineups-only"; fi
+          if [ -n "$DAYS" ]; then OPTS="$OPTS --days $DAYS"; fi
+          python kickbase_fetch.py $OPTS
           rm -f service_account.json
 
       - name: Positions-Cache speichern
@@ -75,3 +87,21 @@ jobs:
         with:
           path: positions_cache.json
           key: positions-${{ github.run_id }}
+
+      - name: Website-Paket erstellen
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: update
+    if: needs.update.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

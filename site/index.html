@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b110e">
+<title>Aufstellungen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f3f5f2; --surface: #ffffff; --surface-2: #eef1ed; --text: #111a15; --muted: #5f6b64;
+    --line: #dde3dc; --accent: #12a150; --accent-ink: #ffffff; --accent-soft: #dcf3e5;
+    --neg: #d23c3c; --live: #e5383b; --gold: #d9a400; --silver: #9aa3ad; --bronze: #c07a3d;
+    --pitch-a: #1f8a4c; --pitch-b: #1c7d45; --pitch-line: rgba(255,255,255,.28);
+    --shadow: 0 1px 2px rgba(16,24,20,.06), 0 2px 8px rgba(16,24,20,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b110e; --surface: #141c18; --surface-2: #1b2520; --text: #eaf1ec; --muted: #93a39a;
+      --line: #24302a; --accent: #2fd27a; --accent-ink: #06210f; --accent-soft: #163626;
+      --neg: #ff6b6b; --live: #ff5a5f; --pitch-a: #145a32; --pitch-b: #12512d;
+      --pitch-line: rgba(255,255,255,.18); --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b110e; --surface: #141c18; --surface-2: #1b2520; --text: #eaf1ec; --muted: #93a39a;
+    --line: #24302a; --accent: #2fd27a; --accent-ink: #06210f; --accent-soft: #163626;
+    --neg: #ff6b6b; --live: #ff5a5f; --pitch-a: #145a32; --pitch-b: #12512d;
+    --pitch-line: rgba(255,255,255,.18); --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text);
+    font: 15px/1.4 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+  button { font: inherit; }
+
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+    padding: calc(12px + env(safe-area-inset-top)) 0 0; border-bottom: 1px solid var(--line); }
+  .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; margin: 0;
+       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stand { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--live); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+          padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .chip .ld { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--live); margin-left: 5px; vertical-align: 1px; }
+
+  .bar2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 10px; }
+  .seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: none; color: var(--muted); padding: 6px 14px; border-radius: 8px;
+                font-size: 13px; font-weight: 700; cursor: pointer; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .link { border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 700; cursor: pointer; padding: 6px 0; }
+
+  .summary { display: flex; gap: 8px; margin-bottom: 12px; }
+  .sbox { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; box-shadow: var(--shadow); }
+  .sbox .v { font-weight: 800; font-size: 16px; }
+  .sbox .l { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .list { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line); overflow: hidden; }
+  .row { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center;
+         padding: 11px 14px; border-top: 1px solid var(--line); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .row:first-child { border-top: 0; }
+  .rk { font-weight: 800; text-align: center; }
+  .rk.r1 { color: var(--gold); } .rk.r2 { color: var(--silver); } .rk.r3 { color: var(--bronze); }
+  .who { min-width: 0; }
+  .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; margin-top: 2px; flex-wrap: wrap; }
+  .me .nm::after { content: "Du"; font-size: 10px; font-weight: 700; margin-left: 6px; padding: 1px 6px;
+       border-radius: 6px; background: var(--accent-soft); color: var(--accent); vertical-align: 2px; }
+  .pts { font-weight: 800; font-size: 18px; text-align: right; }
+  .prog { display: flex; gap: 2px; }
+  .prog i { width: 7px; height: 4px; border-radius: 2px; background: var(--line); }
+  .prog i.done { background: var(--accent); }
+  .prog i.live { background: var(--live); }
+  .chev { width: 16px; height: 16px; color: var(--muted); transition: transform .15s; flex: none; }
+  .row.open .chev { transform: rotate(180deg); }
+  .detail { grid-column: 1 / -1; cursor: default; padding: 4px 0 2px; }
+
+  .pitch { border-radius: 12px; padding: 10px 4px;
+    background: repeating-linear-gradient(180deg, var(--pitch-a) 0 40px, var(--pitch-b) 40px 80px);
+    position: relative; overflow: hidden; }
+  .pitch::before { content: ""; position: absolute; inset: 6px; border: 2px solid var(--pitch-line); border-radius: 6px; }
+  .pitch::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: 44%; height: 16%; transform: translateX(-50%);
+                  border: 2px solid var(--pitch-line); border-bottom: 0; }
+  .line { display: flex; justify-content: space-evenly; gap: 2px; margin: 8px 0; position: relative; z-index: 1; }
+  .pl { flex: 1 1 0; max-width: 90px; min-width: 0; text-align: center; color: #fff; }
+  .shirt { width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 3px; display: grid; place-items: center;
+           background: rgba(255,255,255,.95); color: #0e1512; font-weight: 800; font-size: 10px; position: relative; }
+  .shirt.live::after { content: ""; position: absolute; top: -1px; right: -1px; width: 9px; height: 9px; border-radius: 50%;
+           background: var(--live); border: 2px solid #fff; animation: pulse 1.6s infinite; }
+  .pn { font-size: 11px; font-weight: 600; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        text-shadow: 0 1px 2px rgba(0,0,0,.35); padding: 0 2px; }
+  .tm { font-size: 9.5px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pp { display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 800;
+        background: rgba(0,0,0,.35); color: #fff; white-space: nowrap; }
+  .pp.hi { background: #fff; color: #0e7a3d; }
+  .pp.neg { background: #ff5a5a; color: #fff; }
+  .pp.open { background: rgba(255,255,255,.18); font-weight: 600; }
+  .pp.live { box-shadow: 0 0 0 2px var(--live) inset; }
+
+  .empty { text-align: center; color: var(--muted); padding: 28px 16px; background: var(--surface);
+           border-radius: 14px; border: 1px dashed var(--line); }
+  .cnt { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
+  .tag { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+  .tag.live { background: color-mix(in srgb, var(--live) 15%, transparent); color: var(--live); }
+  .tag.open { background: var(--surface-2); color: var(--muted); }
+  .down { color: var(--neg); }
+  .foot { text-align: center; font-size: 11px; color: var(--muted); margin-top: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="hd">
+      <h1 id="league">Kickbase</h1>
+      <div class="stand"><span class="dot" id="dot"></span><span id="stand">lädt …</span></div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="bar2">
+    <div class="seg" id="seg">
+      <button data-v="teams" class="on">Aufstellungen</button>
+      <button data-v="players">Spieler</button>
+    </div>
+    <button class="link" id="toggleAll">Alle aufklappen</button>
+  </div>
+  <div id="body"></div>
+  <div class="foot">Aktualisiert sich automatisch alle 2 Minuten</div>
+</main>
+
+<script>
+(() => {
+  const ORDER = ["ST", "MF", "ABW", "TW"];
+  const LIVE_MIN = 135;                        // ab Anstoß so lange als "läuft" werten
+  const nf = new Intl.NumberFormat("de-DE");
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = (n) => (n === null || n === undefined || n === "") ? "–" : nf.format(n);
+  const chev = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>';
+
+  // eigene Zeile: Link mit ?ich=Name öffnen (wird im Browser gemerkt)
+  let ME = null;
+  try {
+    const q = new URLSearchParams(location.search).get("ich");
+    if (q !== null) localStorage.setItem("kb-me", q);
+    ME = localStorage.getItem("kb-me");
+  } catch (e) { ME = new URLSearchParams(location.search).get("ich"); }
+
+  let D = null, day = null, view = "teams", opened = new Set(), allOpen = false;
+
+  // ---------- Status eines Spielers ----------
+  function state(p) {
+    if (p.st === 2) return "done";
+    const ko = p.ko ? new Date(p.ko).getTime() : null;
+    if (ko && Date.now() < ko) return "open";
+    if (p.st === 1) return "live";
+    if (ko && Date.now() - ko < LIVE_MIN * 60000) return "live";
+    if (p.points === null || p.points === undefined) return "open";
+    return "done";
+  }
+  const koLabel = (p) => p.ko ? new Date(p.ko).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "offen";
+  const dayLive = (k) => (D.lineups[k] || []).some((e) => e.players.some((p) => state(p) === "live"));
+  const dayHas = (k) => (D.lineups[k] || []).some((e) => e.players.length);
+
+  // ---------- Laden ----------
+  async function load() {
+    try {
+      const data = window.__DATA__ || await (await fetch("data.json?t=" + Date.now(), { cache: "no-store" })).json();
+      D = data;
+      const days = Object.keys(D.lineups).map(Number).sort((a, b) => a - b);
+      if (day === null || !D.lineups[day]) {
+        day = dayHas(D.current_day) ? D.current_day : (days.filter(dayHas).pop() ?? D.current_day);
+      }
+      render();
+    } catch (e) {
+      $("#stand").textContent = "Daten nicht erreichbar";
+      if (!D) $("#body").innerHTML = '<div class="empty">Daten konnten nicht geladen werden.</div>';
+    }
+  }
+
+  // ---------- Header + Spieltage ----------
+  function header() {
+    $("#league").textContent = D.league;
+    document.title = D.league + " – Aufstellungen";
+    const live = dayLive(D.current_day);
+    $("#dot").classList.toggle("live", live);
+    const t = new Date(D.updated);
+    const when = t.toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+    $("#stand").textContent = (live ? "Live · Stand " : "Stand ") + when;
+
+    const days = new Set(Object.keys(D.lineups).map(Number));
+    if (D.current_day) days.add(D.current_day);
+    $("#chips").innerHTML = [...days].sort((a, b) => a - b).map((k) =>
+      `<button class="chip ${k === day ? "on" : ""}" data-d="${k}">ST ${k}${dayLive(k) ? '<span class="ld"></span>' : ""}</button>`).join("");
+    $("#chips").querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+      day = +b.dataset.d; opened.clear(); allOpen = false; render();
+    }));
+    $("#chips .chip.on")?.scrollIntoView({ inline: "center", block: "nearest" });
+  }
+
+  // ---------- Spielfeld ----------
+  function pill(p) {
+    const s = state(p);
+    if (s === "open") return `<div class="pp open">${esc(koLabel(p))}</div>`;
+    const v = p.points ?? 0;
+    const cls = v < 0 ? "neg" : v >= 150 ? "hi" : "";
+    return `<div class="pp num ${cls} ${s === "live" ? "live" : ""}">${fmt(v)}</div>`;
+  }
+  function pitch(players) {
+    if (!players.length) return '<div class="empty" style="padding:16px">Aufstellung nicht verfügbar.</div>';
+    const known = players.every((p) => ORDER.includes(p.pos));
+    // ohne Positionen: Reihenfolge der Kickbase-Aufstellung (TW zuerst) in Reihen
+    const rows = known
+      ? ORDER.map((pos) => players.filter((p) => p.pos === pos))
+      : [players.slice(7), players.slice(4, 7), players.slice(1, 4), players.slice(0, 1)];
+    return '<div class="pitch">' + rows.filter((r) => r.length).map((r) => '<div class="line">' + r.map((p) => `
+      <div class="pl" title="${esc(p.name)} · ${esc(p.team)}">
+        <div class="shirt ${state(p) === "live" ? "live" : ""}">${esc(p.pos || "")}</div>
+        <div class="pn">${esc(p.name)}</div>
+        <div class="tm">${esc(p.team)}</div>
+        ${pill(p)}
+      </div>`).join("") + "</div>").join("") + "</div>";
+  }
+
+  // ---------- Ansicht: Aufstellungen ----------
+  function teams() {
+    const entries = (D.lineups[day] || []).slice();
+    if (!entries.some((e) => e.players.length)) {
+      return `<div class="empty">Die Aufstellungen für Spieltag ${day} werden mit dem ersten Anpfiff aufgedeckt.</div>`;
+    }
+    entries.sort((a, b) => (b.points ?? -1e9) - (a.points ?? -1e9));
+    entries.forEach((e, i) => { e._rk = e.rank ?? i + 1; });
+
+    const all = entries.flatMap((e) => e.players);
+    const nLive = new Set(all.filter((p) => state(p) === "live").map((p) => p.name + p.team)).size;
+    const top = entries[0];
+    const summary = `<div class="summary">
+      <div class="sbox"><div class="v num">${fmt(top?.points)}</div><div class="l">Führung: ${esc(top?.name)}</div></div>
+      <div class="sbox"><div class="v num">${nLive ? nLive : "–"}</div><div class="l">${nLive ? "Spieler gerade im Einsatz" : "gerade kein Spiel"}</div></div>
+    </div>`;
+
+    return summary + '<div class="list">' + entries.map((e) => {
+      const st = e.players.map(state);
+      const done = st.filter((s) => s !== "open").length;
+      const live = st.includes("live");
+      const isOpen = allOpen || opened.has(e.name);
+      return `<div class="row ${e.name === ME ? "me" : ""} ${isOpen ? "open" : ""}" data-n="${esc(e.name)}">
+        <div class="rk r${e._rk}">${e._rk}</div>
+        <div class="who"><div class="nm">${esc(e.name)}</div>
+          <div class="meta"><span class="prog">${st.map((s) => `<i class="${s}"></i>`).join("")}</span>
+            <span class="num">${done}/${e.players.length}</span>${live ? '<span class="tag live">live</span>' : ""}</div></div>
+        <div style="display:flex;align-items:center;gap:6px"><div class="pts num">${fmt(e.points)}</div>${chev}</div>
+        ${isOpen ? `<div class="detail">${pitch(e.players)}</div>` : ""}
+      </div>`;
+    }).join("") + "</div>";
+  }
+
+  // ---------- Ansicht: Spieler ----------
+  function players() {
+    const agg = new Map();
+    (D.lineups[day] || []).forEach((e) => e.players.forEach((p) => {
+      const k = p.name + "|" + p.team;
+      const a = agg.get(k) || { ...p, n: 0, by: [] };
+      a.n++; a.by.push(e.name); agg.set(k, a);
+    }));
+    const list = [...agg.values()].sort((a, b) => (b.points ?? -1e9) - (a.points ?? -1e9));
+    if (!list.length) return `<div class="empty">Für Spieltag ${day} sind noch keine Aufstellungen sichtbar.</div>`;
+    return '<div class="list">' + list.map((p, i) => {
+      const s = state(p);
+      const tag = s === "live" ? '<span class="tag live">live</span>' : s === "open" ? `<span class="tag open">${esc(koLabel(p))}</span>` : "";
+      return `<div class="row" style="cursor:default" title="${esc(p.by.join(", "))}">
+        <div class="rk">${i + 1}</div>
+        <div class="who"><div class="nm">${esc(p.name)}</div>
+          <div class="meta">${esc(p.pos || "")}${p.pos ? " · " : ""}${esc(p.team)} <span class="cnt">${p.n}×</span> ${tag}</div></div>
+        <div class="pts num ${(p.points ?? 0) < 0 ? "down" : ""}">${s === "open" ? "–" : fmt(p.points ?? 0)}</div>
+      </div>`;
+    }).join("") + "</div>";
+  }
+
+  // ---------- Rendern ----------
+  const entriesNames = () => (D.lineups[day] || []).map((e) => e.name);
+  function render() {
+    header();
+    $("#toggleAll").style.visibility = view === "teams" ? "visible" : "hidden";
+    $("#toggleAll").textContent = allOpen ? "Alle zuklappen" : "Alle aufklappen";
+    $("#body").innerHTML = view === "teams" ? teams() : players();
+    $("#body").querySelectorAll(".row[data-n]").forEach((el) => el.addEventListener("click", (ev) => {
+      if (ev.target.closest(".detail")) return;
+      const n = el.dataset.n;
+      if (allOpen) { allOpen = false; entriesNames().forEach((x) => opened.add(x)); }
+      opened.has(n) ? opened.delete(n) : opened.add(n);
+      render();
+    }));
+  }
+
+  $("#seg").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    view = b.dataset.v;
+    $("#seg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    render();
+  }));
+  $("#toggleAll").addEventListener("click", () => { allOpen = !allOpen; opened.clear(); render(); });
+
+  load();
+  setInterval(() => { if (!document.hidden && !window.__DATA__) load(); }, 120000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !window.__DATA__) load(); });
+})();
+</script>
+</body>
+</html>
