@@ -140,7 +140,7 @@
     <button class="link" id="toggleAll">Alle aufklappen</button>
   </div>
   <div id="body"></div>
-  <div class="foot">Aktualisiert sich automatisch alle 2 Minuten</div>
+  <div class="foot">Während der Spiele alle 5 Minuten aktuell</div>
 </main>
 
 <script>
@@ -316,7 +316,7 @@
   $("#toggleAll").addEventListener("click", () => { allOpen = !allOpen; opened.clear(); render(); });
 
   load();
-  setInterval(() => { if (!document.hidden && !window.__DATA__) load(); }, 120000);
+  setInterval(() => { if (!document.hidden && !window.__DATA__) load(); }, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && !window.__DATA__) load(); });
 })();
 </script>

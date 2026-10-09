@@ -2,12 +2,12 @@ name: Kickbase -> Google Sheets + Website
 
 on:
   schedule:
-    # Alle 5 min in den typischen Bundesliga-Fenstern (UTC! deckt Sommer- und Winterzeit ab).
+    # Alle 5 min in den typischen Bundesliga-Fenstern (UTC, deckt Sommer- und Winterzeit ab).
     # Ob wirklich abgerufen wird, entscheidet kickoff_gate.py anhand der Anstoßzeiten.
     - cron: "*/5 18-21 * * 5"     # Fr  20:30-Spiel
     - cron: "*/5 13-20 * * 6"     # Sa  15:30 + 18:30
     - cron: "*/5 13-21 * * 0"     # So  15:30 / 17:30 / 19:30
-    - cron: "*/15 16-21 * * 2,3"  # Di/Mi englische Wochen (seltener -> 15 min)
+    - cron: "*/5 16-21 * * 2,3"   # Di/Mi englische Wochen
     # Täglich 06:00 UTC: Nachlauf für Punktekorrekturen (nur wenn in den letzten 36 h gespielt wurde)
     - cron: "0 6 * * *"
   push:
@@ -19,6 +19,11 @@ on:
         description: "Spieltage für Aufstellungen, z. B. '1 2 3 4' (leer = automatisch)"
         required: false
         default: ""
+      auto:
+        description: "Wie ein geplanter Lauf behandeln (für externen Taktgeber, z. B. cron-job.org)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -30,11 +35,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Entscheidet ohne Kickbase-Request, ob und wie abgerufen wird:
+  #   live = Spiel läuft -> Abruf nur der Aufstellungen + Live-Punkte
+  #   full = täglicher Nachlauf / manuell / Push -> 1 kompletter Abruf
+  #   skip = nichts zu tun
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Kickoff-Gate (OpenLigaDB)
+        id: gate
+        env:
+          DAILY: ${{ github.event.schedule == '0 6 * * *' }}
+        run: |
+          if [ "$DAILY" = "true" ]; then python kickoff_gate.py --daily; else python kickoff_gate.py; fi
+      - name: Modus festlegen
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          AUTO: ${{ github.event.inputs.auto }}
+          DAILY: ${{ github.event.schedule == '0 6 * * *' }}
+          RUN: ${{ steps.gate.outputs.run }}
+        run: |
+          # externer Taktgeber (auto=true) zählt wie ein geplanter Lauf
+          if [ "$AUTO" = "true" ]; then EVENT=schedule; fi
+          if [ "$EVENT" != "schedule" ]; then MODE=full
+          elif [ "$RUN" != "true" ]; then MODE=skip
+          elif [ "$DAILY" = "true" ]; then MODE=full
+          else MODE=live; fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Modus: $MODE"
+
   update:
+    needs: gate
+    if: needs.gate.outputs.mode != 'skip'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      run: ${{ steps.gate.outputs.run }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,16 +91,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Kickoff-Gate (OpenLigaDB)
-        id: gate
-        env:
-          FORCE_RUN: ${{ github.event_name != 'schedule' }}
-          DAILY: ${{ github.event.schedule == '0 6 * * *' }}
-        run: |
-          if [ "$DAILY" = "true" ]; then python kickoff_gate.py --daily; else python kickoff_gate.py; fi
-
       - name: Positions-Cache laden
-        if: steps.gate.outputs.run == 'true'
         uses: actions/cache/restore@v4
         with:
           path: positions_cache.json
@@ -62,7 +99,6 @@ jobs:
           restore-keys: positions-
 
       - name: Kickbase abrufen, Sheet + data.json schreiben
-        if: steps.gate.outputs.run == 'true'
         env:
           KICKBASE_EMAIL: ${{ secrets.KICKBASE_EMAIL }}
           KICKBASE_PASSWORD: ${{ secrets.KICKBASE_PASSWORD }}
@@ -70,38 +106,27 @@ jobs:
           KICKBASE_SHEET: ${{ secrets.KICKBASE_SHEET }}
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           DAYS: ${{ github.event.inputs.days }}
-          # Live-Läufe: nur Aufstellungen + Live-Punkte (19 statt ~60 Kickbase-Requests).
-          # Täglicher Lauf und manuelle Starts aktualisieren zusätzlich Gesamt/Spieltage im Sheet.
-          LIVE: ${{ github.event_name == 'schedule' && github.event.schedule != '0 6 * * *' }}
+          MODE: ${{ needs.gate.outputs.mode }}
         run: |
           printf '%s' "$GOOGLE_SA_JSON" > service_account.json
           OPTS="--site site"
-          if [ "$LIVE" = "true" ]; then OPTS="$OPTS --lineups-only"; fi
+          # live: nur Aufstellungen + Live-Punkte; full: zusätzlich Gesamt/Spieltage im Sheet
+          if [ "$MODE" = "live" ]; then OPTS="$OPTS --lineups-only"; fi
           if [ -n "$DAYS" ]; then OPTS="$OPTS --days $DAYS"; fi
           python kickbase_fetch.py $OPTS
           rm -f service_account.json
 
       - name: Positions-Cache speichern
-        if: steps.gate.outputs.run == 'true'
         uses: actions/cache/save@v4
         with:
           path: positions_cache.json
           key: positions-${{ github.run_id }}
 
       - name: Website-Paket erstellen
-        if: steps.gate.outputs.run == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
-  deploy:
-    needs: update
-    if: needs.update.outputs.run == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
+      - name: Website veröffentlichen
+        id: deploy
         uses: actions/deploy-pages@v4

@@ -9,7 +9,7 @@ Läuft per GitHub Actions; Kickbase wird nur abgefragt, wenn laut Anstoßzeiten 
 - `.github/workflows/kickbase.yml` – Zeitplan
 
 ## Zeitplan (UTC)
-- Fr 18–21, Sa 13–20, So 13–21 Uhr alle 5 min; Di/Mi 16–21 Uhr alle 15 min
+- Fr 18–21, Sa 13–20, So 13–21, Di/Mi 16–21 Uhr alle 5 min
 - Gate prüft jeweils, ob ein Spiel in [Anstoß −5 min, Anstoß +150 min] liegt → nur dann Kickbase-Abruf
 - täglich 06:00 UTC: Nachlauf, falls in den letzten 36 h gespielt wurde (Punktekorrekturen)
 - manuell: Actions → „Kickbase -> Google Sheets“ → *Run workflow* (optional Spieltage, z. B. `1 2 3 4`)
