@@ -11,3 +11,8 @@ __pycache__/
 
 # Website-Daten (werden bei jedem Lauf erzeugt)
 site/data.json
+
+.env
+service_account.json
+data_out/
+export/

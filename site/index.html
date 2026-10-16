@@ -178,9 +178,12 @@
   const dayHas = (k) => (D.lineups[k] || []).some((e) => e.players.length);
 
   // ---------- Laden ----------
+  // data.json liegt auf dem Branch "data" (wird vom lokalen Runner gepusht)
+  const DATA_URL = "https://raw.githubusercontent.com/CSchwaller/Kickbase_sheets/data/data.json";
+
   async function load() {
     try {
-      const data = window.__DATA__ || await (await fetch("data.json?t=" + Date.now(), { cache: "no-store" })).json();
+      const data = window.__DATA__ || await (await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" })).json();
       D = data;
       const days = Object.keys(D.lineups).map(Number).sort((a, b) => a - b);
       if (day === null || !D.lineups[day]) {
